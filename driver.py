@@ -8,7 +8,7 @@ import nn
 '''
 NETWORK STRUCTURE
 
-    Input Layer
+    Input Layer 
         Nodes: [1,maxLength * len(const.bodyCodes)]
 
     Hidden layer (Layer 1)
@@ -24,24 +24,24 @@ NETWORK STRUCTURE
 
 
 # Generate the testing data
-testSamples = 10**3
+testSamples = 10**4
 print('Generating {} test samples...'.format(testSamples))
 #testInputs, testOutputs = bodyCodes.generateSampleData(testSamples, 0.33, 0.33)
-testInputs, testOutputs = bodyCodes.generateSampleData(testSamples, 0.00, 0.50)
+testInputs, testOutputs = bodyCodes.generateSampleData(testSamples, 0.33, 0.33)
 
 # Create the neural network
 inputNodes = len(const.bodyCodes) * const.maxNumOfActions
 print('Creating a feed forward neural network with {} input node(s), '\
     '{} hidden node(s), and {} output node(s).'.format(inputNodes, inputNodes, 1))
-ffnn = nn.FeedForwardNN2(inputNodes, inputNodes, 24, 1, learningRate=0.0001)
+ffnn = nn.FeedForwardNN2(inputNodes, inputNodes, inputNodes // 2, 1, learningRate=0.00000025)
 
 #print(ffnn.inputToHiddenWeights)
 #print(ffnn.hiddenToOutputWeights)
 
 # Train the neural network
-iterations = 10**4
+iterations = 10**3
 print('Training the network for {} iterations...'.format(iterations))
-ffnn.gradientDescent(testInputs, testOutputs, iterations, graph=True, draw=True)
+ffnn.gradientDescent(testInputs, testOutputs, iterations, graph=True, draw=False)
 
 # Validate
 validationSamples = 10**3
@@ -83,12 +83,20 @@ print('The model correctly predicted {} percent of non-steals, '\
 #X = np.array([[0, 0], [1, 0], [0, 1], [1, 1]])
 #y = np.array([[0, 1, 1, 0]]).T
 
-X = np.array([[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [1, -1], [1, 0], [1, 1]])
-y = np.array([[-1, 0, 1 , 0, 0, 1, 1, 1]]).T
-ffnn = nn.FeedForwardNN2(2, 8, 6, 1, learningRate=0.000001)
-ffnn.gradientDescent(X, y, 10**5, graph=False, draw=True)
+inputs = np.array([[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [1, -1], [1, 0], [1, 1]])
+target = np.array([[-1, 0, 1 , 0, 0, 1, 1, 1]]).T
+
+'''
+#ffnn = nn.FeedForwardNN2(2, 16, 16, 1, learningRate=0.0001)
+#ffnn.gradientDescent(X, y, 10**4, graph=True, draw=True)
+'''
+
+ffnn = nn.SimpleFFNN(2, 16, 16, 1, learningRate=0.0001)
+ffnn.setTrainingData(inputs, target)
+ffnn.train(10**4)
+
 for pair in [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]:
-    print('max(', pair, ') = ', ffnn.prediction(pair))
+    print('max(', pair, ') = ', ffnn.forwardPropagation(pair)) #ffnn.prediction(pair))
 
 #print(ffnn._bias)
 
