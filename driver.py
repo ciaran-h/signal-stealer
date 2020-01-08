@@ -4,6 +4,9 @@ import random
 import const
 import bodyCodes
 import nn
+import os
+
+os.system("cls")
 
 '''
 NETWORK STRUCTURE
@@ -88,7 +91,7 @@ target = np.array([[-1, 0, 1 , 0, 0, 1, 1, 1]]).T
 
 ffnn = nn.SimpleFFNN(2, 4, 4, 1, learningRate=0.0002, seed=0)
 ffnn.setTrainingData(inputs, target)
-ffnn.train(10**5, graph=True, showOutput=False, showWeights=False)
+ffnn.train(25000, graph=True, showOutput=True, showWeights=True)
 
 for pair in [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]:
     print('max(', pair, ') = ', ffnn.forwardPropagation(pair))

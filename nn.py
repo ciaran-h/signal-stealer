@@ -17,6 +17,18 @@ def _meanSquaredError(error):
 
 class SimpleFFNN:
     
+    _fps = 2
+
+    _weights = []
+    _act = []
+    _inputs = _target = _feed = _feedAct = None
+
+    _xAxisOverview, _yAxisOverview = [], []
+    _xAxisLive, _yAxisLive = [], []
+    _targetXValues = 50
+    _expStep, _step = 1, 100
+    _liveValues = 100
+
     def __init__(self, *nodesPerLayer, learningRate=1, seed=None):
         
         # Keep results consistent
@@ -29,17 +41,13 @@ class SimpleFFNN:
         self._numOfLayers = len(nodesPerLayer)
         self._nodesPerLayer = nodesPerLayer
 
-        self._weights = []
-        self._act = []
-        self._inputs = self._target = self._feed = self._feedAct = None
-
         for i in range(self._numOfLayers-1):
             nodesInCurLayer = nodesPerLayer[i]
             nodesInNextLayer = nodesPerLayer[i+1]
             self._weights.append(
                 _randomWeights(nodesInCurLayer, nodesInNextLayer))
             self._act.append(act.LeakyReluAF())
-
+        
         self._act.pop(-1)
         self._act.append(act.AtanAF())
 
@@ -104,44 +112,83 @@ class SimpleFFNN:
         assert self._inputs is not None and self._target is not None, \
             "No training data. Make sure you call 'setTrainingData' before training."
 
+        if graph: self._initGraph()
+
         lastDrawTime = 0
 
-        if graph:
-            xAxis = []
-            yAxis = []
-            plt.title('Training')
-            plt.xlabel('Iteration')
-            plt.ylabel('Error (MSE)')
-    
         for i in range(epoch):
             
-            # TODO: Give user more control
-            if i % (epoch // 10) == 0:
-                self._learningRate *= 0.5
+            # Update the learning rate
+            # TODO: remoke this -- give user more control
+            if (i + 1) % (epoch // 10) == 0:
+                print('Learning rate reduced from ', self._learningRate, end='')
+                self._learningRate *= 0.8
+                print(' to ', self._learningRate)
 
+            # Propagate the input through the network and get
+            # the result
             result = self.forwardPropagation(self._inputs)
+            # Determine the error between the result and the 
+            # target result
             error = self._target - result
+            # Update the weights to reduce this error
             self.backPropagation(error)
 
-            if time.time() - lastDrawTime > (1.0 / 30.0):
-                if graph:
-                    xAxis.append(i)
-                    yAxis.append(_meanSquaredError(error))
-                    plt.plot(xAxis, yAxis, color='red')
-                    plt.pause(0.0001)
-
-                if showOutput:
-                    self._visualizeOutput()
-
-                if showWeights:
-                    self._visualizeWeights()
-
+            # Draw any visualizations
+            if graph: self._graphPoint(i, _meanSquaredError(error))
+            if time.time() - lastDrawTime > (1.0 / self._fps):
+                if showOutput: self._visualizeOutput()
+                if showWeights: self._visualizeWeights()
+                if graph: self._drawGraph()
                 lastDrawTime = time.time()
-        
-        if graph:
-            plt.plot(xAxis, yAxis, color='black')
-            plt.show()
     
+    def _initGraph(self):
+
+        self._xAxisOverview.clear()
+        self._yAxisOverview.clear()
+        self._xAxisLive.clear()
+        self._yAxisLive.clear()
+        self._step = 1
+
+    def _graphPoint(self, x, y):
+
+        if x % self._step == 0:
+            self._xAxisLive.append(x)
+            self._yAxisLive.append(y)
+            if len(self._xAxisLive) > self._liveValues:
+                self._xAxisLive.pop(0)
+                self._yAxisLive.pop(0)
+        if x % self._expStep == 0:
+            # Add the point to the graph
+            self._xAxisOverview.append(x)
+            self._yAxisOverview.append(y)
+            # If the list has grown to two times the
+            # target size, halve it
+            if len(self._xAxisOverview) % (self._targetXValues * 2) == 0:
+                #print('Halving array...')
+                # Remove every other element
+                self._xAxisOverview = self._xAxisOverview[::2]
+                self._yAxisOverview = self._yAxisOverview[::2]
+                self._expStep *= 2
+    
+    def _drawGraph(self):
+
+        plt.clf()
+
+        plt.subplot(3, 1, 1)
+        plt.title('Training Overview')
+        plt.xlabel('Iteration')
+        plt.ylabel('Error (MSE)')
+        plt.plot(self._xAxisOverview, self._yAxisOverview, color='red')
+
+        plt.subplot(3, 1, 3)
+        plt.title('Live Training')
+        plt.xlabel('Iteration')
+        plt.ylabel('Error (MSE)')
+        plt.plot(self._xAxisLive, self._yAxisLive, color='red')
+
+        plt.pause(0.0001)
+
     def _visualizeOutput(self):
 
         width, height = 20, 20
@@ -159,14 +206,14 @@ class SimpleFFNN:
                 c = int(normalized * 255)
                 img[x][y] = (c, c, c)
         
-        resized = cv2.resize(img, (512, 512))
+        resized = cv2.resize(img, (256, 256))
 
         cv2.imshow('Output Visualization', resized)
         cv2.waitKey(20)
     
     def _visualizeWeights(self):
 
-        width, height = 512 * 2, 512
+        width, height = 256 * 2, 256
 
         img = np.full((height, width, 3), 255, np.uint8)
 
