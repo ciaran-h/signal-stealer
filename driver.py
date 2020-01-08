@@ -21,7 +21,7 @@ NETWORK STRUCTURE
         Dimensions of weighting factor matrix: [maxLength,1]
         Output dimension: [1,1]
 '''
-
+'''
 
 # Generate the testing data
 testSamples = 10**4
@@ -80,31 +80,15 @@ print('The model correctly predicted {} percent of non-steals, '\
 )
 
 '''
-#X = np.array([[0, 0], [1, 0], [0, 1], [1, 1]])
-#y = np.array([[0, 1, 1, 0]]).T
+
+np.seterr(all='raise')
 
 inputs = np.array([[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [1, -1], [1, 0], [1, 1]])
 target = np.array([[-1, 0, 1 , 0, 0, 1, 1, 1]]).T
 
-'''
-#ffnn = nn.FeedForwardNN2(2, 16, 16, 1, learningRate=0.0001)
-#ffnn.gradientDescent(X, y, 10**4, graph=True, draw=True)
-'''
-
-ffnn = nn.SimpleFFNN(2, 16, 16, 1, learningRate=0.0001)
+ffnn = nn.SimpleFFNN(2, 4, 4, 1, learningRate=0.0002, seed=0)
 ffnn.setTrainingData(inputs, target)
-ffnn.train(10**4)
+ffnn.train(10**5, graph=True, showOutput=False, showWeights=False)
 
 for pair in [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]:
-    print('max(', pair, ') = ', ffnn.forwardPropagation(pair)) #ffnn.prediction(pair))
-
-#print(ffnn._bias)
-
-#print('0 xor 0 =', ffnn.prediction([0, 0]))
-#print('1 xor 0 =', ffnn.prediction([1, 0]))
-#print('0 xor 1 =', ffnn.prediction([0, 1]))
-#print('1 xor 1 =', ffnn.prediction([1, 1]))
-
-#sequence = bodyCodes.bodyCodeSequenceToIntCode(['RS','LS','LE','RE','RA'])
-#print('Prediction is: ' + str(ffnn.prediction(sequence)))
-'''
+    print('max(', pair, ') = ', ffnn.forwardPropagation(pair))

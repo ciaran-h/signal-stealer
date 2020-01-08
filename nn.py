@@ -8,15 +8,23 @@ import random
 import math
 import act
 from abc import ABC, abstractmethod
-# import bezier
 
 def _randomWeights(rows, cols):
     return np.random.rand(rows, cols) * 2.0 - 1.0
 
+def _meanSquaredError(error):
+    return np.dot(error[0], error[0].T) / len(error[0])
+
 class SimpleFFNN:
     
-    def __init__(self, *nodesPerLayer, learningRate=1):
+    def __init__(self, *nodesPerLayer, learningRate=1, seed=None):
         
+        # Keep results consistent
+        if seed is not None:
+            np.random.seed(seed)
+        else:
+            np.random.seed(hash(uuid.uuid4()) % (2**32 - 1))
+
         self._learningRate = learningRate
         self._numOfLayers = len(nodesPerLayer)
         self._nodesPerLayer = nodesPerLayer
@@ -39,13 +47,13 @@ class SimpleFFNN:
 
         # BASE CASE: output layer
         if layer == self._numOfLayers-1:
-            return error * self._act[layer-1].compute(self._feed[layer])
+            return error * self._act[layer-1].computeDer(self._feed[layer])
         
         # RECURSION
         result = np.dot(
             self._gradientDescentHelper(layer+1, error),
             self._weights[layer].T
-        ) * self._act[layer-1].compute(self._feed[layer-1])
+        ) * self._act[layer-1].computeDer(self._feed[layer])
         
         return result
     
@@ -58,22 +66,19 @@ class SimpleFFNN:
 
         return result
 
-    def backPropagation(self):
-
-        result = self.forwardPropagation(self._inputs)
-        error = self._target - result
+    def backPropagation(self, error):
 
         for k in range(self._numOfLayers-1):
             self._weights[k] += self._gradientDescent(k, error) * self._learningRate
 
     def forwardPropagation(self, inputs):
 
-        self._feed[0] = self._feedAct[0] = outputs = inputs
+        self._feed[0] = self._feedAct[0] = inputs
         for i in range(1, self._numOfLayers):
-            self._feed[i] = np.dot(outputs, self._weights[i])
-            self._feedAct[i] = outputs = self._act[i].compute(self._feed[i])
+            self._feed[i] = np.dot(self._feedAct[i-1], self._weights[i-1])
+            self._feedAct[i] = self._act[i-1].compute(self._feed[i])
 
-        return outputs
+        return self._feedAct[-1]
 
     def setTrainingData(self, inputs, target):
 
@@ -85,6 +90,7 @@ class SimpleFFNN:
         self._feed = []
         self._feedAct = []
 
+        # Add an array of zeros with the same dimensions as the inputs
         self._feed.append(np.zeros((len(inputs), len(inputs[0]))))
         self._feedAct.append(np.zeros((len(inputs), len(inputs[0]))))
         for i in range(1, self._numOfLayers):
@@ -93,13 +99,127 @@ class SimpleFFNN:
             self._feedAct.append(np.zeros(shape))
         
 
-    def train(self, epoch, graph=True, draw=False):
+    def train(self, epoch, graph=True, showOutput=False, showWeights=False):
 
         assert self._inputs is not None and self._target is not None, \
             "No training data. Make sure you call 'setTrainingData' before training."
 
+        lastDrawTime = 0
+
+        if graph:
+            xAxis = []
+            yAxis = []
+            plt.title('Training')
+            plt.xlabel('Iteration')
+            plt.ylabel('Error (MSE)')
+    
         for i in range(epoch):
-            self.backPropagation()
+            
+            # TODO: Give user more control
+            if i % (epoch // 10) == 0:
+                self._learningRate *= 0.5
+
+            result = self.forwardPropagation(self._inputs)
+            error = self._target - result
+            self.backPropagation(error)
+
+            if time.time() - lastDrawTime > (1.0 / 30.0):
+                if graph:
+                    xAxis.append(i)
+                    yAxis.append(_meanSquaredError(error))
+                    plt.plot(xAxis, yAxis, color='red')
+                    plt.pause(0.0001)
+
+                if showOutput:
+                    self._visualizeOutput()
+
+                if showWeights:
+                    self._visualizeWeights()
+
+                lastDrawTime = time.time()
+        
+        if graph:
+            plt.plot(xAxis, yAxis, color='black')
+            plt.show()
+    
+    def _visualizeOutput(self):
+
+        width, height = 20, 20
+        img = np.full((width, height, 3), 255, np.uint8)
+
+        values = [[self.forwardPropagation([x / (width-1), y / (height-1)])
+            for y in range(height)]
+            for x in range(width)]
+        largest = max(max(i) for i in values)
+        smallest = min(min(i) for i in values)
+
+        for x in range(width):
+            for y in range(height):
+                normalized = (values[x][y] - smallest) / (largest - smallest)
+                c = int(normalized * 255)
+                img[x][y] = (c, c, c)
+        
+        resized = cv2.resize(img, (512, 512))
+
+        cv2.imshow('Output Visualization', resized)
+        cv2.waitKey(20)
+    
+    def _visualizeWeights(self):
+
+        width, height = 512 * 2, 512
+
+        img = np.full((height, width, 3), 255, np.uint8)
+
+        buffer = 4
+        minLineWidth = 1
+        orange = (233, 121, 67)
+        blue = (67, 125, 233)
+        grey = (34, 40, 49)
+        
+        maxNumOfNodes = max(self._nodesPerLayer)
+        nodeRadius = height // (buffer * 2 * maxNumOfNodes)
+
+        maxLineWidth = nodeRadius // 4
+
+        verticalSpacing = buffer * nodeRadius * 2
+        horizontalSpacing = width // len(self._nodesPerLayer)
+
+        # Draw the weights
+        maxWeight = max(np.amax(w) for w in self._weights)
+        minWeight = min(np.amin(w) for w in self._weights)
+
+        for layer in range(len(self._weights)):
+            w = self._weights[layer]
+            leftX = horizontalSpacing * layer + horizontalSpacing // 2
+            rightX = horizontalSpacing * (layer + 1) + horizontalSpacing // 2
+            for leftNode in range(len(w)):
+                for rightNode in range(len(w[leftNode])):
+                    leftY = verticalSpacing * leftNode + verticalSpacing // 2 - nodeRadius // 2
+                    rightY = verticalSpacing * rightNode + verticalSpacing // 2 - nodeRadius // 2
+                    strength = (w[leftNode][rightNode] -
+                                minWeight) / (maxWeight - minWeight)
+                    width = int((maxLineWidth - minLineWidth)
+                                * strength + minLineWidth)
+                    if w[leftNode][rightNode] >= 0:
+                        color = tuple([int((1 - strength) * (255 - x) + x) for x in orange])
+                    else:
+                        color = tuple([int((1 - strength) * (255 - x) + x) for x in blue])
+                    cv2.line(img, (leftX, leftY), (rightX, rightY), color, width, cv2.LINE_AA)
+
+        # Draw the nodes
+        for layer in range(len(self._nodesPerLayer)):
+            for node in range(self._nodesPerLayer[layer]):
+                x = horizontalSpacing * layer + horizontalSpacing // 2
+                y = verticalSpacing * node + verticalSpacing // 2 - nodeRadius // 2
+                cv2.circle(img, (x, y), nodeRadius, grey, cv2.FILLED, cv2.LINE_AA)
+        
+        cv2.imshow('Weight Visualization', img)
+        cv2.waitKey(20)
+
+
+
+
+    
 
 class FeedForwardNN2:
     '''
@@ -308,8 +428,6 @@ class FeedForwardNN2:
             plt.show()
 
         print(' Done!')
-        #print('Error: ', error.T[0])
-        #print(error)
 
     def prediction(self, inputs):
         '''
@@ -376,6 +494,7 @@ class FeedForwardNN2:
             [0.0, 0.625, 1.0],
             [0.0, 0.5, 0.5],
         ])
+        
         # curve = bezier.Curve(nodes, degree=2)
         # points = curve.evaluate(0.75)
         # axis = curve.plot(10)
