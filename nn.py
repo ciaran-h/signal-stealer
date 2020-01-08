@@ -12,8 +12,8 @@ from abc import ABC, abstractmethod
 def _randomWeights(rows, cols):
     return np.random.rand(rows, cols) * 2.0 - 1.0
 
-def _meanSquaredError(error):
-    return np.dot(error[0], error[0].T) / len(error[0])
+def _meanSquared(vector):
+    return np.dot(vector[0], vector[0].T) / len(vector[0])
 
 class SimpleFFNN:
     
@@ -51,33 +51,33 @@ class SimpleFFNN:
         self._act.pop(-1)
         self._act.append(act.AtanAF())
 
-    def _gradientDescentHelper(self, layer, error):
+    def _gradientDescentHelper(self, layer, loss):
 
         # BASE CASE: output layer
         if layer == self._numOfLayers-1:
-            return error * self._act[layer-1].computeDer(self._feed[layer])
+            return loss * self._act[layer-1].computeDer(self._feed[layer])
         
         # RECURSION
         result = np.dot(
-            self._gradientDescentHelper(layer+1, error),
+            self._gradientDescentHelper(layer+1, loss),
             self._weights[layer].T
         ) * self._act[layer-1].computeDer(self._feed[layer])
         
         return result
     
-    def _gradientDescent(self, layer, error):
+    def _gradientDescent(self, layer, loss):
 
         result = np.dot(
             self._feedAct[layer].T,
-            self._gradientDescentHelper(layer+1, error)
+            self._gradientDescentHelper(layer+1, loss)
         )
 
         return result
 
-    def backPropagation(self, error):
+    def backPropagation(self, loss):
 
         for k in range(self._numOfLayers-1):
-            self._weights[k] += self._gradientDescent(k, error) * self._learningRate
+            self._weights[k] += self._gradientDescent(k, loss) * self._learningRate
 
     def forwardPropagation(self, inputs):
 
@@ -109,8 +109,18 @@ class SimpleFFNN:
 
     def train(self, epoch, graph=True, showOutput=False, showWeights=False):
 
+        # Ensure training data has been supplied and makes sense
         assert self._inputs is not None and self._target is not None, \
             "No training data. Make sure you call 'setTrainingData' before training."
+        assert len(self._inputs) == len(self._target), \
+            'Each input should have a target value.'
+        
+        # Check that the network dimensions make sense
+        assert len(self._inputs[0]) == self._nodesPerLayer[0], \
+            'The number of input values does not match the number of input nodes.'
+        assert len(self._target[0]) == self._nodesPerLayer[-1], \
+            'The number of output values does not match the number of output nodes.'
+
 
         if graph: self._initGraph()
 
@@ -119,7 +129,7 @@ class SimpleFFNN:
         for i in range(epoch):
             
             # Update the learning rate
-            # TODO: remoke this -- give user more control
+            # TODO: remake this -- give user more control
             if (i + 1) % (epoch // 10) == 0:
                 print('Learning rate reduced from ', self._learningRate, end='')
                 self._learningRate *= 0.8
@@ -128,14 +138,14 @@ class SimpleFFNN:
             # Propagate the input through the network and get
             # the result
             result = self.forwardPropagation(self._inputs)
-            # Determine the error between the result and the 
+            # Determine the loss between the result and the 
             # target result
-            error = self._target - result
-            # Update the weights to reduce this error
-            self.backPropagation(error)
+            loss = self._target - result
+            # Update the weights to reduce this loss
+            self.backPropagation(loss)
 
             # Draw any visualizations
-            if graph: self._graphPoint(i, _meanSquaredError(error))
+            if graph: self._graphPoint(i, _meanSquared(loss))
             if time.time() - lastDrawTime > (1.0 / self._fps):
                 if showOutput: self._visualizeOutput()
                 if showWeights: self._visualizeWeights()
@@ -191,30 +201,84 @@ class SimpleFFNN:
 
     def _visualizeOutput(self):
 
-        width, height = 20, 20
-        img = np.full((width, height, 3), 255, np.uint8)
+        assert self._nodesPerLayer[0] == 2, \
+            'There must be exactly 2 nodes in the input layer ' \
+            'for it to be visualized.'
+        assert self._nodesPerLayer[-1] <= 3, \
+            'There must be 3 or less nodes in the output layer ' \
+            'for it to be visualized.'
 
-        values = [[self.forwardPropagation([x / (width-1), y / (height-1)])
-            for y in range(height)]
-            for x in range(width)]
-        largest = max(max(i) for i in values)
-        smallest = min(min(i) for i in values)
+        size = 25
+        resizedSize = 512
+        width = size * 2 + 1
+        img = np.full((width, width, 3), 255, np.uint8)
 
-        for x in range(width):
-            for y in range(height):
-                normalized = (values[x][y] - smallest) / (largest - smallest)
-                c = int(normalized * 255)
-                img[x][y] = (c, c, c)
+        # Feeds values in [-1,1] to the neural network and gets their values
+        values = [[self.forwardPropagation([x / size, y / size])
+            for y in range(-size, size+1)]
+            for x in range(-size, size+1)]
+        # TODO: inlude max and min for sample targets
+        largest = max(max(max(entry) for entry in value) for value in values)
+        smallest = min(min(min(entry) for entry in value) for value in values)
+
+        def _getPixelColor(v):
+            c = [0, 0, 0]
+            for i in range(3):
+                k = min(i, len(v)-1)
+                normalized = (v[k] - smallest) / (largest - smallest)
+                c[i] = int(normalized * 255)
+            return tuple(c)
+
+        # Set the pixel colors
+        for x in range(len(values)):
+            for y in range(len(values[0])):
+                img[y][x] = _getPixelColor(values[x][y])
         
-        resized = cv2.resize(img, (256, 256))
+        # Ensure we return the same subset everytime
+        # TODO: only compute this once
+        rng = random.Random(0)
+        samples = rng.choices([i for i in range(len(self._inputs))], k=(size*size)//20)
+        
+        # Resize the image
+        resized = cv2.resize(img, (resizedSize, resizedSize))
+        
+        # Draw the target samples on the resized image
+        for i in samples:
+            
+            # The assert allows us to do this
+            # with reasonable assurance that it will
+            # work correctly
+            x, y = self._inputs[i]
+            nx, ny = (x+1)/2, (y+1)/2
+            px, py = int(round(nx*(resizedSize-1))), int(round(ny*(resizedSize-1)))
 
+            # Determine the color of the pixel
+            rectSize = 4
+            bgRectStart, bgRectEnd = (px-rectSize, py-rectSize), (px+rectSize, py+rectSize)
+            cRectStart, cRectEnd = (px-rectSize+1, py-rectSize+1), (px+rectSize-1, py+rectSize-1)
+            cv2.rectangle(resized, bgRectStart, bgRectEnd, (255,255,255), thickness=cv2.FILLED)
+            cv2.rectangle(resized, cRectStart, cRectEnd, _getPixelColor(self._target[i]), thickness=cv2.FILLED, lineType=cv2.LINE_AA)
+            #resized[py][px] = _getPixelColor(self._target[i])
+        
+        # Show the image
         cv2.imshow('Output Visualization', resized)
         cv2.waitKey(20)
     
     def _visualizeWeights(self):
 
-        width, height = 256 * 2, 256
+        windowSize = 512
+        maxWindowSize = windowSize * 2
 
+        maxNumOfNodes = max(self._nodesPerLayer)
+
+        ratio = self._numOfLayers / maxNumOfNodes
+        print(ratio)
+        if ratio >= 0:
+            width = windowSize
+            height = min(maxWindowSize, round(width * 1 / ratio))
+        else:
+            height = windowSize
+            width = min(maxWindowSize, round(height * ratio))
         img = np.full((height, width, 3), 255, np.uint8)
 
         buffer = 4
@@ -222,12 +286,8 @@ class SimpleFFNN:
         orange = (233, 121, 67)
         blue = (67, 125, 233)
         grey = (34, 40, 49)
-        
-        maxNumOfNodes = max(self._nodesPerLayer)
         nodeRadius = height // (buffer * 2 * maxNumOfNodes)
-
-        maxLineWidth = nodeRadius // 4
-
+        maxLineWidth = max(minLineWidth, nodeRadius // 4)
         verticalSpacing = buffer * nodeRadius * 2
         horizontalSpacing = width // len(self._nodesPerLayer)
 
@@ -245,13 +305,13 @@ class SimpleFFNN:
                     rightY = verticalSpacing * rightNode + verticalSpacing // 2 - nodeRadius // 2
                     strength = (w[leftNode][rightNode] -
                                 minWeight) / (maxWeight - minWeight)
-                    width = int((maxLineWidth - minLineWidth)
+                    lineWidth = int((maxLineWidth - minLineWidth)
                                 * strength + minLineWidth)
                     if w[leftNode][rightNode] >= 0:
                         color = tuple([int((1 - strength) * (255 - x) + x) for x in orange])
                     else:
                         color = tuple([int((1 - strength) * (255 - x) + x) for x in blue])
-                    cv2.line(img, (leftX, leftY), (rightX, rightY), color, width, cv2.LINE_AA)
+                    cv2.line(img, (leftX, leftY), (rightX, rightY), color, lineWidth, cv2.LINE_AA)
 
         # Draw the nodes
         for layer in range(len(self._nodesPerLayer)):

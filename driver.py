@@ -5,6 +5,7 @@ import const
 import bodyCodes
 import nn
 import os
+import math
 
 os.system("cls")
 
@@ -86,12 +87,39 @@ print('The model correctly predicted {} percent of non-steals, '\
 
 np.seterr(all='raise')
 
+# Return max
+'''
 inputs = np.array([[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [1, -1], [1, 0], [1, 1]])
 target = np.array([[-1, 0, 1 , 0, 0, 1, 1, 1]]).T
+'''
 
-ffnn = nn.SimpleFFNN(2, 4, 4, 1, learningRate=0.0002, seed=0)
+# Select max of 2
+'''
+inputs = np.array([[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [1, -1], [1, 0], [1, 1]])
+target = np.array([[ 1,  1], [ 0, 1], [ 0, 1], [1,  0], [1, 1], [1,  0], [1, 0], [1, 1]])
+'''
+
+# Select max of 3
+
+inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
+                    for i in range(10**3)])
+target = np.array([[1 if v[0]==max(v) else 0,1 if v[1]==max(v) else 0,1 if v[0]*v[1]<0 else 0]
+                    for v in inputs])
+
+'''
+# Outside of circle
+inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]  
+                    for i in range(10**3)])
+target = np.array([[1 if (math.sqrt((v[0]-0.5)*(v[0]-0.5)+v[1]*v[1]) < 1**2) else 0] for v in inputs])
+'''
+
+ffnn = nn.SimpleFFNN(2, 8, 4, 3, learningRate=0.000001, seed=0)
 ffnn.setTrainingData(inputs, target)
-ffnn.train(25000, graph=True, showOutput=True, showWeights=True)
+ffnn.train(10**5, graph=True, showOutput=True, showWeights=False)
+print('LOSS: ', nn._meanSquared(ffnn.forwardPropagation(inputs) - target))
 
-for pair in [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]:
-    print('max(', pair, ') = ', ffnn.forwardPropagation(pair))
+for i in range(min(15, len(inputs))):
+    print(inputs[i], ' : ', ffnn.forwardPropagation(inputs[i]), ' should be ', target[i])
+
+#for pair in [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]:
+#    print('max(', pair, ') = ', ffnn.forwardPropagation(pair))
