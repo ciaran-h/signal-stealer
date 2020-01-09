@@ -23,6 +23,7 @@ class SimpleFFNN:
     # Neural Network
     _weights = []
     _act = []
+    _bias = []
     _inputs = _target = _feed = _feedAct = None
 
     # Graphing
@@ -44,12 +45,13 @@ class SimpleFFNN:
         self._numOfLayers = len(nodesPerLayer)
         self._numOfWeights = self._numOfLayers-1
         self._nodesPerLayer = nodesPerLayer
-
+    
         for i in range(self._numOfWeights):
             nodesInCurLayer = nodesPerLayer[i]
             nodesInNextLayer = nodesPerLayer[i+1]
             self._weights.append(_randomWeights(nodesInCurLayer, nodesInNextLayer))
             self._act.append(act.LeakyReluAF())
+            self._bias.append(1)
         
         self._act.pop(-1)
         self._act.append(act.AtanAF())
@@ -70,23 +72,28 @@ class SimpleFFNN:
     
     def _gradientDescent(self, layer, loss):
 
-        result = np.dot(
+        gradient = self._gradientDescentHelper(layer+1, loss)
+        weightDelta = np.dot(
             self._feedAct[layer].T,
-            self._gradientDescentHelper(layer+1, loss)
+            gradient
         )
+        # TODO: not sure if this is a correct implementation
+        biasDelta = sum(sum(gradient))
 
-        return result
+        return weightDelta, biasDelta
 
     def backPropagation(self, loss):
 
         for k in range(self._numOfWeights):
-            self._weights[k] += self._gradientDescent(k, loss) * self._learningRate
+            weightDelta, biasDelta = self._gradientDescent(k, loss)
+            self._weights[k] += weightDelta * self._learningRate
+            self._bias[k] += biasDelta * self._learningRate
 
     def forwardPropagation(self, inputs):
 
         self._feed[0] = self._feedAct[0] = inputs
         for i in range(1, self._numOfLayers):
-            self._feed[i] = np.dot(self._feedAct[i-1], self._weights[i-1])
+            self._feed[i] = np.dot(self._feedAct[i-1], self._weights[i-1]) + self._bias[i-1]
             self._feedAct[i] = self._act[i-1].compute(self._feed[i])
 
         return self._feedAct[-1]
@@ -101,7 +108,7 @@ class SimpleFFNN:
         self._feed = []
         self._feedAct = []
 
-        # Add an array of zeros with the same dimensions as the inputs
+        # Initialize the feeds
         self._feed.append(np.zeros((len(inputs), len(inputs[0]))))
         self._feedAct.append(np.zeros((len(inputs), len(inputs[0]))))
         for i in range(1, self._numOfLayers):
@@ -124,13 +131,10 @@ class SimpleFFNN:
         assert len(self._target[0]) == self._nodesPerLayer[-1], \
             'The number of output values does not match the number of output nodes.'
 
-
+        lastDrawTime = 0
         if graph: self._initGraph()
 
-        lastDrawTime = 0
-
         for i in range(epoch):
-            
             # Update the learning rate
             # TODO: remake this -- give user more control
             if (i + 1) % (epoch // 10) == 0:
@@ -141,7 +145,7 @@ class SimpleFFNN:
             # Propagate the input through the network and get
             # the result
             result = self.forwardPropagation(self._inputs)
-            # Determine the loss between the result and the 
+            # Determine the loss between the actual result and the 
             # target result
             loss = self._target - result
             # Update the weights to reduce this loss
@@ -161,7 +165,7 @@ class SimpleFFNN:
         self._yAxisOverview.clear()
         self._xAxisLive.clear()
         self._yAxisLive.clear()
-        self._step = 1
+        self._expStep = 1
 
     def _graphPoint(self, x, y):
 
@@ -195,7 +199,7 @@ class SimpleFFNN:
         plt.plot(self._xAxisOverview, self._yAxisOverview, color='red')
 
         plt.subplot(3, 1, 3)
-        plt.title('Live Training')
+        plt.title('Real-time Training')
         plt.xlabel('Iteration')
         plt.ylabel('Error (MSE)')
         plt.plot(self._xAxisLive, self._yAxisLive, color='red')
@@ -217,30 +221,34 @@ class SimpleFFNN:
         img = np.full((width, width, 3), 255, np.uint8)
 
         # Feeds values in [-1,1] to the neural network and gets their values
-        values = [[self.forwardPropagation([x / size, y / size])
-            for y in range(-size, size+1)]
-            for x in range(-size, size+1)]
+        inputs = np.array([[x / size, y / size]
+                    for y in range(-size, size+1) for x in range(-size, size+1)])
+        prevInputs, prevTarget = self._inputs, self._target
+        self.setTrainingData(inputs, None)
+        values = self.forwardPropagation(inputs)
+        self.setTrainingData(prevInputs, prevTarget)
         # TODO: inlude max and min for sample targets
-        largest = max(max(max(entry) for entry in value) for value in values)
-        smallest = min(min(min(entry) for entry in value) for value in values)
+        largest = max(max(value) for value in values)
+        smallest = min(min(value) for value in values)
 
         def _getPixelColor(v):
             c = [0, 0, 0]
             for i in range(3):
                 k = min(i, len(v)-1)
                 normalized = (v[k] - smallest) / (largest - smallest)
-                c[i] = int(normalized * 255)
+                c[i] = round(normalized * 255)
             return tuple(c)
 
         # Set the pixel colors
-        for x in range(len(values)):
-            for y in range(len(values[0])):
-                img[y][x] = _getPixelColor(values[x][y])
+        for x in range(width):
+            for y in range(width):
+                i = x * width + y
+                img[x][y] = _getPixelColor(values[i])
         
         # Ensure we return the same subset everytime
         # TODO: only compute this once
         rng = random.Random(0)
-        samples = rng.choices([i for i in range(len(self._inputs))], k=(size*size)//20)
+        samples = rng.choices([i for i in range(len(self._inputs))], k=(size*size)//10)
         
         # Resize the image
         resized = cv2.resize(img, (resizedSize, resizedSize))
@@ -254,7 +262,6 @@ class SimpleFFNN:
             x, y = self._inputs[i]
             nx, ny = (x+1)/2, (y+1)/2
             px, py = int(round(nx*(resizedSize-1))), int(round(ny*(resizedSize-1)))
-
             # Determine the color of the pixel
             rectSize = 4
             bgRectStart, bgRectEnd = (px-rectSize, py-rectSize), (px+rectSize, py+rectSize)
