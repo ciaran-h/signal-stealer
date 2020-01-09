@@ -113,9 +113,9 @@ inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
 target = np.array([[1 if (math.sqrt((v[0]-0.5)*(v[0]-0.5)+v[1]*v[1]) < 1**2) else 0] for v in inputs])
 '''
 
-ffnn = nn.SimpleFFNN(2, 8, 4, 3, learningRate=0.000001, seed=0)
+ffnn = nn.SimpleFFNN(2, 32, 32, 3, learningRate=0.000001, seed=0)
 ffnn.setTrainingData(inputs, target)
-ffnn.train(10**5, graph=True, showOutput=True, showWeights=False)
+ffnn.train(10**5, graph=True, showOutput=True, showWeights=True)
 print('LOSS: ', nn._meanSquared(ffnn.forwardPropagation(inputs) - target))
 
 for i in range(min(15, len(inputs))):

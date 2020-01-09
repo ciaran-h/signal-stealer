@@ -17,12 +17,15 @@ def _meanSquared(vector):
 
 class SimpleFFNN:
     
+    # Visualization
     _fps = 2
 
+    # Neural Network
     _weights = []
     _act = []
     _inputs = _target = _feed = _feedAct = None
 
+    # Graphing
     _xAxisOverview, _yAxisOverview = [], []
     _xAxisLive, _yAxisLive = [], []
     _targetXValues = 50
@@ -31,7 +34,7 @@ class SimpleFFNN:
 
     def __init__(self, *nodesPerLayer, learningRate=1, seed=None):
         
-        # Keep results consistent
+        # Keep results consistent if wanted
         if seed is not None:
             np.random.seed(seed)
         else:
@@ -39,13 +42,13 @@ class SimpleFFNN:
 
         self._learningRate = learningRate
         self._numOfLayers = len(nodesPerLayer)
+        self._numOfWeights = self._numOfLayers-1
         self._nodesPerLayer = nodesPerLayer
 
-        for i in range(self._numOfLayers-1):
+        for i in range(self._numOfWeights):
             nodesInCurLayer = nodesPerLayer[i]
             nodesInNextLayer = nodesPerLayer[i+1]
-            self._weights.append(
-                _randomWeights(nodesInCurLayer, nodesInNextLayer))
+            self._weights.append(_randomWeights(nodesInCurLayer, nodesInNextLayer))
             self._act.append(act.LeakyReluAF())
         
         self._act.pop(-1)
@@ -76,7 +79,7 @@ class SimpleFFNN:
 
     def backPropagation(self, loss):
 
-        for k in range(self._numOfLayers-1):
+        for k in range(self._numOfWeights):
             self._weights[k] += self._gradientDescent(k, loss) * self._learningRate
 
     def forwardPropagation(self, inputs):
@@ -272,7 +275,6 @@ class SimpleFFNN:
         maxNumOfNodes = max(self._nodesPerLayer)
 
         ratio = self._numOfLayers / maxNumOfNodes
-        print(ratio)
         if ratio >= 0:
             width = windowSize
             height = min(maxWindowSize, round(width * 1 / ratio))
