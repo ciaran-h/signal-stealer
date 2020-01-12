@@ -3,9 +3,10 @@ import string
 import random
 import const
 import bodyCodes
-import nn
+import neuralnets
 import os
 import math
+import act
 
 os.system("cls")
 
@@ -97,12 +98,20 @@ target = np.array([[ 1,  1], [ 0, 1], [ 0, 1], [1,  0], [1, 1], [1,  0], [1, 0],
 '''
 
 # Select max of 3
-
+'''
 inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
                     for i in range(10**3)])
 target = np.array([[1 if v[0]==max(v) else -1,1 if v[1]==max(v) else -1,1 if v[0]*v[1]<0 else -1]
                     for v in inputs])
+'''
 
+inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
+                    for i in range(10**3)])
+target = np.array([[
+    v[0]*v[0]+v[1]*v[1],
+    abs(v[0])+abs(v[1]),
+    math.cos(v[0]-v[1])+math.sin(v[0]+v[1])]
+                    for v in inputs])
 
 '''
 # Outside of circle
@@ -111,13 +120,15 @@ inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
 target = np.array([[1 if (math.sqrt((v[0]-0.5)*(v[0]-0.5)+v[1]*v[1]) < 0.5**2) else -1] for v in inputs])
 '''
 
-ffnn = nn.SimpleFFNN(len(inputs[0]), 8, 8, 8, 8, 8, 8, len(target[0]), learningRate=0.000005, seed=0)
-ffnn.setTrainingData(inputs, target)
-ffnn.train(10**4, graph=True, showOutput=True, showWeights=False)
-print('LOSS: ', nn._meanSquared(ffnn.forwardPropagation(inputs) - target))
+nn = neuralnets.SimpleFFNNBuilder(learningRate=0.0001, seed=0) \
+        .addLayers(len(inputs[0]), 8, 8, 8, 8, actFun=act.LeakyReluAF()) \
+        .addLayer(len(target[0]),act.AtanAF()) \
+        .build()
+nn.setTrainingData(inputs, target)
+nn.train(10**5, graph=True, showOutput=True, showWeights=True)
 
 for i in range(min(15, len(inputs))):
-    print(inputs[i], ' : ', ffnn.forwardPropagation(inputs[i]), ' should be ', target[i])
+    print(inputs[i], ' : ', nn.forwardPropagation(inputs[i]), ' should be ', target[i])
 
 #for pair in [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]:
 #    print('max(', pair, ') = ', ffnn.forwardPropagation(pair))

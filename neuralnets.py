@@ -15,10 +15,42 @@ def _randomWeights(rows, cols):
 def _meanSquared(vector):
     return np.dot(vector[0], vector[0].T) / len(vector[0])
 
+class SimpleFFNNBuilder():
+
+    _nodesPerLayer = []
+    _activationFunctions = []
+
+    def __init__(self, learningRate=1, seed=None):
+        self._learningRate = learningRate
+        self._seed = seed
+
+    def addLayer(self, numOfNodes, actFun=act.ReluAF):
+        self._nodesPerLayer.append(numOfNodes)
+        self._activationFunctions.append(actFun)
+        return self
+
+    def addLayers(self, *nodesPerLayer, actFun=act.ReluAF):
+        for i in range(len(nodesPerLayer)):
+            self._nodesPerLayer.append(nodesPerLayer[i])
+            self._activationFunctions.append(actFun)
+        return self
+    
+    def build(self):
+        result = SimpleFFNN(
+            self._nodesPerLayer,
+            self._activationFunctions,
+            learningRate=self._learningRate,
+            seed=self._seed
+        )
+
+        return result
+
+
 class SimpleFFNN:
     
     # Visualization
     _fps = 2
+    _frame = 0
 
     # Neural Network
     _weights = []
@@ -33,7 +65,7 @@ class SimpleFFNN:
     _expStep, _step = 1, 100
     _liveValues = 100
 
-    def __init__(self, *nodesPerLayer, learningRate=1, seed=None):
+    def __init__(self, nodesPerLayer, activationFunctions, learningRate=1, seed=None):
         
         # Keep results consistent if wanted
         if seed is not None:
@@ -50,11 +82,9 @@ class SimpleFFNN:
             nodesInCurLayer = nodesPerLayer[i]
             nodesInNextLayer = nodesPerLayer[i+1]
             self._weights.append(_randomWeights(nodesInCurLayer, nodesInNextLayer))
-            self._act.append(act.LeakyReluAF())
-            self._bias.append(1)
+            self._bias.append(0)
         
-        self._act.pop(-1)
-        self._act.append(act.AtanAF())
+        self._act = activationFunctions
 
     def _gradientDescentHelper(self, layer, loss):
 
@@ -215,7 +245,7 @@ class SimpleFFNN:
             'There must be 3 or less nodes in the output layer ' \
             'for it to be visualized.'
 
-        size = 25
+        size = 20
         resizedSize = 512
         width = size * 2 + 1
         img = np.full((width, width, 3), 255, np.uint8)
@@ -245,6 +275,9 @@ class SimpleFFNN:
                 i = x * width + y
                 img[x][y] = _getPixelColor(values[i])
         
+        #cv2.imwrite("C:\\Users\\Ciaran Hogan\\Desktop\\nn\\frame_"+str(self._frame)+".png", img)
+        #self._frame = self._frame + 1
+
         # Ensure we return the same subset everytime
         # TODO: only compute this once
         rng = random.Random(0)
