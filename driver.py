@@ -7,6 +7,8 @@ import neuralnets
 import os
 import math
 import act
+import cv2
+import afile
 
 os.system("cls")
 
@@ -105,6 +107,7 @@ target = np.array([[1 if v[0]==max(v) else -1,1 if v[1]==max(v) else -1,1 if v[0
                     for v in inputs])
 '''
 
+# Random distance measurments
 inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
                     for i in range(10**3)])
 target = np.array([[
@@ -120,12 +123,22 @@ inputs = np.array([[random.uniform(-1, 1), random.uniform(-1, 1)]
 target = np.array([[1 if (math.sqrt((v[0]-0.5)*(v[0]-0.5)+v[1]*v[1]) < 0.5**2) else -1] for v in inputs])
 '''
 
-nn = neuralnets.SimpleFFNNBuilder(learningRate=0.0001, seed=0) \
-        .addLayers(len(inputs[0]), 8, 8, 8, 8, actFun=act.LeakyReluAF()) \
-        .addLayer(len(target[0]),act.AtanAF()) \
+# Load image
+# CREATE CONSTRICTED NETWORK TO DISPLAY THE IMAGE
+'''
+img = cv2.imread("C:\\Users\\Ciaran Hogan\\Desktop\\geese-teeth.jpg")
+inputs = np.array([(x-len(img)//2,y-len(img[0])//2) for x in range(len(img)) for y in range(len(img[0]))])
+target = np.array([(np.array(img[x+len(img)//2][y+len(img[0])//2])-128)/256 for x,y in inputs])
+'''
+
+
+nn = neuralnets.SimpleFFNNBuilder(learningRate=0.00001, seed=0) \
+        .addLayer(len(inputs[0]), actFun=act.LeakyReluAF()) \
+        .addLayers(8, 8, 8, 8, 8, 8, 8, 8, actFun=act.LeakyReluAF()) \
+        .addLayer(len(target[0]), actFun=act.AtanAF()) \
         .build()
 nn.setTrainingData(inputs, target)
-nn.train(10**5, graph=True, showOutput=True, showWeights=True)
+nn.train(10**5, graph=True, showOutput=True, showWeights=False)
 
 for i in range(min(15, len(inputs))):
     print(inputs[i], ' : ', nn.forwardPropagation(inputs[i]), ' should be ', target[i])

@@ -46,4 +46,4 @@ class LeakyReluAF(ActivationFunction):
 
     def computeDer(self, x):
         z = np.copy(x)
-        return np.where(z > 0, 1, 0.01)
+        return np.nan_to_num(np.where(z > 0, 1, 0.01))
